@@ -1,6 +1,6 @@
-[package]
-name = "simulacion_de_estructuras_en_rust"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+members = [
+    "microkernel",
+    "contenedores",
+]
+resolver = "3"

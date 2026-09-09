@@ -3,5 +3,9 @@
 version = 4
 
 [[package]]
-name = "simulacion_de_estructuras_en_rust"
+name = "contenedores"
+version = "0.1.0"
+
+[[package]]
+name = "microkernel"
 version = "0.1.0"
