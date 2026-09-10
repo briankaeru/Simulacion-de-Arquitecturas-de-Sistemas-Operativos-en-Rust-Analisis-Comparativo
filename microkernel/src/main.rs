@@ -1,5 +1,6 @@
 use std::fmt;
 
+// mensaje que se pasa entre procesos via ipc
 struct Mensaje {
     origen: String,
     destino: String,
@@ -12,11 +13,13 @@ impl fmt::Display for Mensaje {
     }
 }
 
+// nodo de la lista enlazada
 struct NodoMensaje {
     mensaje: Mensaje,
     siguiente: Option<Box<NodoMensaje>>,
 }
 
+// cola fifo con lista enlazada
 struct ColaMensajes {
     cabeza: Option<Box<NodoMensaje>>,
 }
@@ -59,42 +62,126 @@ impl ColaMensajes {
     }
 }
 
-fn main() {
-    println!("=== Simulación: Arquitectura Microkernel ===");
-    println!("--- Fase 2: Prueba de Cola de Mensajes IPC ---\n");
+// servidor que corre en espacio de usuario y atiende peticiones de disco
+struct ServidorDisco {
+    nombre: String,
+}
 
-    let mut cola = ColaMensajes::nueva();
-    println!("[+] Encolando mensajes...");
-
-    let mensajes_prueba = [
-        ("ProcesoA", "ServidorDisco", "LEER archivo.txt"),
-        ("ProcesoB", "ServidorRed",   "ENVIAR paquete"),
-        ("ProcesoC", "ServidorDisco", "ESCRIBIR log.txt"),
-    ];
-
-    for (origen, destino, contenido) in &mensajes_prueba {
-        let msg = Mensaje {
-            origen: origen.to_string(),
-            destino: destino.to_string(),
-            contenido: contenido.to_string(),
-        };
-        println!("    Encolado: {}", msg);
-        cola.encolar(msg);
-    }
-
-    println!("\n[-] Desencolando mensajes (orden FIFO)...");
-
-    while !cola.esta_vacia() {
-        if let Some(msg) = cola.desencolar() {
-            println!("    Desencolado: {}", msg);
+impl ServidorDisco {
+    fn nuevo(nombre: &str) -> Self {
+        ServidorDisco {
+            nombre: nombre.to_string(),
         }
     }
-    
-    println!("\n[!] Intentando desencolar de cola vacía...");
-    match cola.desencolar() {
-        Some(msg) => println!("    Mensaje: {}", msg),
-        None      => println!("    Cola vacía — no hay mensajes pendientes."),
+
+    // procesa un mensaje y devuelve una respuesta
+    fn atender(&self, msg: &Mensaje) -> Mensaje {
+        let respuesta = format!("OK: '{}' procesado por {}", msg.contenido, self.nombre);
+        println!("    [{}] procesando: {}", self.nombre, msg.contenido);
+
+        Mensaje {
+            origen: self.nombre.clone(),
+            destino: msg.origen.clone(),
+            contenido: respuesta,
+        }
+    }
+}
+
+// el microkernel solo enruta mensajes entre procesos y servidores
+struct Microkernel {
+    cola_entrada: ColaMensajes,
+    cola_salida: ColaMensajes,
+}
+
+impl Microkernel {
+    fn nuevo() -> Self {
+        Microkernel {
+            cola_entrada: ColaMensajes::nueva(),
+            cola_salida: ColaMensajes::nueva(),
+        }
     }
 
-    println!("\n--- Fin de prueba Fase 2 ---");
+    // recibe un mensaje de un proceso y lo pone en la cola de entrada
+    fn enviar(&mut self, msg: Mensaje) {
+        println!("  [Kernel] enrutando mensaje: {}", msg);
+        self.cola_entrada.encolar(msg);
+    }
+
+    // despacha todos los mensajes pendientes al servidor correspondiente
+    fn despachar(&mut self, servidor: &ServidorDisco) {
+        println!("\n  [Kernel] despachando mensajes al servidor...");
+        while !self.cola_entrada.esta_vacia() {
+            if let Some(msg) = self.cola_entrada.desencolar() {
+                let respuesta = servidor.atender(&msg);
+                self.cola_salida.encolar(respuesta);
+            }
+        }
+    }
+
+    // entrega las respuestas a los procesos de usuario
+    fn entregar_respuestas(&mut self) {
+        println!("\n  [Kernel] entregando respuestas a procesos...");
+        while !self.cola_salida.esta_vacia() {
+            if let Some(resp) = self.cola_salida.desencolar() {
+                println!("    -> {}", resp);
+            }
+        }
+    }
+}
+
+// proceso de usuario que hace peticiones al microkernel
+struct ProcesoUsuario {
+    nombre: String,
+}
+
+impl ProcesoUsuario {
+    fn nuevo(nombre: &str) -> Self {
+        ProcesoUsuario {
+            nombre: nombre.to_string(),
+        }
+    }
+
+    // crea un mensaje dirigido al servidor de disco
+    fn solicitar(&self, operacion: &str, servidor_destino: &str) -> Mensaje {
+        println!("  [{}] solicita: {}", self.nombre, operacion);
+        Mensaje {
+            origen: self.nombre.clone(),
+            destino: servidor_destino.to_string(),
+            contenido: operacion.to_string(),
+        }
+    }
+}
+
+fn main() {
+    println!("╔══════════════════════════════════════════════╗");
+    println!("║   Simulación: Arquitectura Microkernel      ║");
+    println!("╚══════════════════════════════════════════════╝\n");
+
+    // crear componentes del sistema
+    let mut kernel = Microkernel::nuevo();
+    let servidor = ServidorDisco::nuevo("ServidorDisco");
+    let proc_a = ProcesoUsuario::nuevo("ProcesoA");
+    let proc_b = ProcesoUsuario::nuevo("ProcesoB");
+    let proc_c = ProcesoUsuario::nuevo("ProcesoC");
+
+    // los procesos hacen peticiones que pasan por el kernel
+    println!("── Fase 1: Procesos envían solicitudes ──");
+    let msg1 = proc_a.solicitar("LEER archivo.txt", "ServidorDisco");
+    kernel.enviar(msg1);
+
+    let msg2 = proc_b.solicitar("ESCRIBIR log.txt", "ServidorDisco");
+    kernel.enviar(msg2);
+
+    let msg3 = proc_c.solicitar("ELIMINAR temp.dat", "ServidorDisco");
+    kernel.enviar(msg3);
+
+    // el kernel despacha al servidor
+    println!("\n── Fase 2: Kernel despacha al servidor ──");
+    kernel.despachar(&servidor);
+
+    // el kernel devuelve las respuestas
+    println!("\n── Fase 3: Kernel entrega respuestas ──");
+    kernel.entregar_respuestas();
+
+    println!("\n══ Simulación finalizada ══");
 }
