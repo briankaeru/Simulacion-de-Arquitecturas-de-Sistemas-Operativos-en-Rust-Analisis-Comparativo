@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
+use colored::Colorize;
 
 #[derive(Clone)]
 enum Operacion {
@@ -12,10 +13,10 @@ enum Operacion {
 impl fmt::Display for Operacion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Operacion::Leer(arch) => write!(f, "LEER {}", arch),
-            Operacion::Escribir(arch, datos) => write!(f, "ESCRIBIR '{}' en {}", datos, arch),
-            Operacion::Eliminar(arch) => write!(f, "ELIMINAR {}", arch),
-            Operacion::Respuesta(msg) => write!(f, "{}", msg),
+            Operacion::Leer(arch) => write!(f, "LEER {}", arch.cyan()),
+            Operacion::Escribir(arch, datos) => write!(f, "ESCRIBIR '{}' en {}", datos.cyan(), arch.cyan()),
+            Operacion::Eliminar(arch) => write!(f, "ELIMINAR {}", arch.cyan()),
+            Operacion::Respuesta(msg) => write!(f, "{}", msg.cyan()),
         }
     }
 }
@@ -32,7 +33,7 @@ impl fmt::Display for Mensaje {
         write!(
             f,
             "[{} -> {}]: {}",
-            self.origen, self.destino, self.contenido
+            self.origen.green(), self.destino.yellow(), self.contenido
         )
     }
 }
@@ -51,7 +52,7 @@ impl ServidorDisco {
     fn atender(&self, msg: &Mensaje) -> Mensaje {
         println!(
             "    [{}] procesando petición de {}",
-            self.nombre, msg.origen
+            self.nombre.yellow(), msg.contenido
         );
 
         let resultado = match &msg.contenido {
@@ -85,12 +86,12 @@ impl Microkernel {
     }
 
     fn enviar(&mut self, msg: Mensaje) {
-        println!("  [Kernel] enrutando mensaje: {}", msg);
+        println!("  [{}] enrutando mensaje: {}", "Kernel".magenta().bold(), msg);
         self.cola_entrada.push_back(msg);
     }
 
     fn despachar(&mut self, servidor: &ServidorDisco) {
-        println!("\n  [Kernel] despachando mensajes al servidor...");
+        println!("\n  [{}] despachando mensajes al servidor...", "Kernel".magenta().bold());
         while let Some(msg) = self.cola_entrada.pop_front() {
             let respuesta = servidor.atender(&msg);
             self.cola_salida.push_back(respuesta);
@@ -98,7 +99,7 @@ impl Microkernel {
     }
 
     fn entregar_respuestas(&mut self) {
-        println!("\n  [Kernel] entregando respuestas a procesos...");
+        println!("\n  [{}] entregando respuestas a procesos...", "Kernel".magenta().bold());
         while let Some(resp) = self.cola_salida.pop_front() {
             println!("    -> {}", resp);
         }
@@ -117,7 +118,7 @@ impl ProcesoUsuario {
     }
 
     fn solicitar(&self, operacion: Operacion, servidor_destino: &str) -> Mensaje {
-        println!("  [{}] solicita: {}", self.nombre, operacion);
+        println!("  [{}] solicita: {}", self.nombre.green(), operacion);
         Mensaje {
             origen: self.nombre.clone(),
             destino: servidor_destino.to_string(),
@@ -127,9 +128,9 @@ impl ProcesoUsuario {
 }
 
 fn main() {
-    println!("╔══════════════════════════════════════════════╗");
-    println!("║   Simulación: Arquitectura Microkernel       ║");
-    println!("╚══════════════════════════════════════════════╝\n");
+    println!("{}", "╔══════════════════════════════════════════════╗".blue().bold());
+    println!("{}", "║   Simulación: Arquitectura Microkernel       ║".blue().bold());
+    println!("{}", "╚══════════════════════════════════════════════╝\n".blue().bold());
 
     let mut kernel = Microkernel::nuevo();
     let servidor = ServidorDisco::nuevo("ServidorDisco");
@@ -137,7 +138,7 @@ fn main() {
     let proc_b = ProcesoUsuario::nuevo("ProcesoB");
     let proc_c = ProcesoUsuario::nuevo("ProcesoC");
 
-    println!("── Fase 1: Procesos envían solicitudes ──");
+    println!("{}", "── Fase 1: Procesos envían solicitudes ──".yellow().bold());
     kernel.enviar(proc_a.solicitar(Operacion::Leer("archivo.txt".to_string()), "ServidorDisco"));
     kernel.enviar(proc_b.solicitar(
         Operacion::Escribir("log.txt".to_string(), "DATOS".to_string()),
@@ -145,11 +146,11 @@ fn main() {
     ));
     kernel.enviar(proc_c.solicitar(Operacion::Eliminar("temp.dat".to_string()), "ServidorDisco"));
 
-    println!("\n── Fase 2: Kernel despacha al servidor ──");
+    println!("\n{}", "── Fase 2: Kernel despacha al servidor ──".yellow().bold());
     kernel.despachar(&servidor);
 
-    println!("\n── Fase 3: Kernel entrega respuestas ──");
+    println!("\n{}", "── Fase 3: Kernel entrega respuestas ──".yellow().bold());
     kernel.entregar_respuestas();
 
-    println!("\n══ Simulación finalizada ══");
+    println!("\n{}", "══ Simulación finalizada ══".green().bold());
 }

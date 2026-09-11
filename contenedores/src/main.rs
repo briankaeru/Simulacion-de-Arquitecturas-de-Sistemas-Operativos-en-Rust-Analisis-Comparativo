@@ -1,6 +1,6 @@
 use std::fmt;
+use colored::Colorize;
 
-// proceso que corre dentro de un contenedor
 struct Proceso {
     pid_real: u32,
     pid_virtual: u32,
@@ -13,18 +13,19 @@ impl fmt::Display for Proceso {
         write!(
             f,
             "{}  (PID real: {}, PID virtual: {}, mem: {} MB)",
-            self.nombre, self.pid_real, self.pid_virtual, self.memoria_mb
+            self.nombre.green(),
+            self.pid_real.to_string().cyan(),
+            self.pid_virtual.to_string().yellow(),
+            self.memoria_mb.to_string().cyan()
         )
     }
 }
 
-// nodo de la lista enlazada de procesos
 struct NodoProceso {
     proceso: Proceso,
     siguiente: Option<Box<NodoProceso>>,
 }
 
-// lista enlazada para rastrear los procesos de un contenedor
 struct ListaProcesos {
     cabeza: Option<Box<NodoProceso>>,
     cantidad: u32,
@@ -38,7 +39,6 @@ impl ListaProcesos {
         }
     }
 
-    // agrega un proceso al final de la lista
     fn agregar(&mut self, proceso: Proceso) {
         let nuevo = Box::new(NodoProceso {
             proceso,
@@ -60,7 +60,6 @@ impl ListaProcesos {
         self.cantidad += 1;
     }
 
-    // muestra todos los procesos de la lista
     fn mostrar(&self) {
         let mut actual = &self.cabeza;
         while let Some(nodo) = actual {
@@ -69,7 +68,6 @@ impl ListaProcesos {
         }
     }
 
-    // calcula la memoria total usada por todos los procesos
     fn memoria_total(&self) -> u32 {
         let mut total = 0;
         let mut actual = &self.cabeza;
@@ -81,7 +79,6 @@ impl ListaProcesos {
     }
 }
 
-// simula los cgroups de linux: limita recursos del contenedor
 struct Cgroup {
     limite_memoria_mb: u32,
 }
@@ -93,13 +90,11 @@ impl Cgroup {
         }
     }
 
-    // verifica si agregar un proceso excederia el limite de memoria
     fn permitir(&self, memoria_actual: u32, memoria_nueva: u32) -> bool {
         memoria_actual + memoria_nueva <= self.limite_memoria_mb
     }
 }
 
-// simula los namespaces de linux: asigna pids virtuales aislados
 struct Namespace {
     siguiente_pid: u32,
 }
@@ -109,7 +104,6 @@ impl Namespace {
         Namespace { siguiente_pid: 1 }
     }
 
-    // asigna el proximo pid virtual disponible
     fn asignar_pid(&mut self) -> u32 {
         let pid = self.siguiente_pid;
         self.siguiente_pid += 1;
@@ -118,16 +112,15 @@ impl Namespace {
 }
 
 fn main() {
-    println!("╔══════════════════════════════════════════════╗");
-    println!("║   Simulación: Arquitectura de Contenedores  ║");
-    println!("╚══════════════════════════════════════════════╝\n");
-    println!("── Fase 4: Prueba de estructuras de control ──\n");
+    println!("{}","╔══════════════════════════════════════════╗".red().bold());
+    println!("{} {} {}", "║".red().bold(), "Simulación: Arquitectura de Contenedores".bright_blue().on_bright_white().bold(), "║".red().bold());
+    println!("{}","╚══════════════════════════════════════════╝\n".red().bold());
+    println!("{}","── Fase : Inicialización de Contenedores──\n".yellow().bold());
 
     let mut lista = ListaProcesos::nueva();
     let cgroup = Cgroup::nuevo(512);
     let mut ns = Namespace::nuevo();
 
-    // procesos de prueba con distinto consumo de memoria
     let pruebas = [
         (100, "nginx", 128),
         (101, "redis", 256),
@@ -135,8 +128,8 @@ fn main() {
     ];
 
     println!(
-        "[+] Agregando procesos al contenedor (limite: {} MB)...",
-        cgroup.limite_memoria_mb
+        "{}",
+        format!("[+] Agregando procesos al contenedor (limite: {} MB)...", cgroup.limite_memoria_mb).magenta().bold()
     );
 
     for (pid_real, nombre, mem) in &pruebas {
@@ -150,23 +143,32 @@ fn main() {
                 nombre: nombre.to_string(),
                 memoria_mb: *mem,
             };
-            println!("    OK: {} asignado (PID virtual: {})", nombre, pid_v);
+            println!(
+                "    {}: {} asignado (PID virtual: {})",
+                "OK".green().bold(),
+                nombre.green(),
+                pid_v.to_string().yellow()
+            );
             lista.agregar(proc);
         } else {
             println!(
-                "    RECHAZADO: {} excede el limite ({} + {} > {})",
-                nombre, mem_actual, mem, cgroup.limite_memoria_mb
+                "    {}: {} excede el limite ({} + {} > {})",
+                "RECHAZADO".red().bold(),
+                nombre.green(),
+                mem_actual.to_string().cyan(),
+                mem.to_string().cyan(),
+                cgroup.limite_memoria_mb.to_string().cyan()
             );
         }
     }
 
-    println!("\n[*] Procesos activos en el contenedor:");
+    println!("\n{}", "[*] Procesos activos en el contenedor:".magenta().bold());
     lista.mostrar();
     println!(
         "\n    Memoria total usada: {} / {} MB",
-        lista.memoria_total(),
-        cgroup.limite_memoria_mb
+        lista.memoria_total().to_string().cyan(),
+        cgroup.limite_memoria_mb.to_string().cyan()
     );
 
-    println!("\n── Fin de prueba Fase 4 ──");
+    println!("\n{}", "── Fin de la simulación ──".green().bold());
 }
