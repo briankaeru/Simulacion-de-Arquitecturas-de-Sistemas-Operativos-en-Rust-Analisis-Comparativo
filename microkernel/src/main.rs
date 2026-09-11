@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt;
 
-// Definición estricta de las operaciones IPC usando enum[cite: 2].
 #[derive(Clone)]
 enum Operacion {
     Leer(String),
@@ -14,7 +13,6 @@ impl fmt::Display for Operacion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Operacion::Leer(arch) => write!(f, "LEER {}", arch),
-            // Corrección: Ahora se lee y muestra el segundo String (los datos)
             Operacion::Escribir(arch, datos) => write!(f, "ESCRIBIR '{}' en {}", datos, arch),
             Operacion::Eliminar(arch) => write!(f, "ELIMINAR {}", arch),
             Operacion::Respuesta(msg) => write!(f, "{}", msg),
@@ -22,7 +20,6 @@ impl fmt::Display for Operacion {
     }
 }
 
-// Mensaje que se pasa entre procesos mediante IPC simulado[cite: 2]
 #[derive(Clone)]
 struct Mensaje {
     origen: String,
@@ -32,28 +29,36 @@ struct Mensaje {
 
 impl fmt::Display for Mensaje {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{} -> {}]: {}", self.origen, self.destino, self.contenido)
+        write!(
+            f,
+            "[{} -> {}]: {}",
+            self.origen, self.destino, self.contenido
+        )
     }
 }
 
-// Servidor en espacio de usuario
 struct ServidorDisco {
     nombre: String,
 }
 
 impl ServidorDisco {
     fn nuevo(nombre: &str) -> Self {
-        ServidorDisco { nombre: nombre.to_string() }
+        ServidorDisco {
+            nombre: nombre.to_string(),
+        }
     }
 
-    // Procesa el mensaje usando pattern matching[cite: 2]
     fn atender(&self, msg: &Mensaje) -> Mensaje {
-        println!("    [{}] procesando petición de {}", self.nombre, msg.contenido);
-        
+        println!(
+            "    [{}] procesando petición de {}",
+            self.nombre, msg.origen
+        );
+
         let resultado = match &msg.contenido {
             Operacion::Leer(arch) => format!("Contenido de '{}'", arch),
-            // Corrección: Ahora se hace uso de la variable 'datos'
-            Operacion::Escribir(arch, datos) => format!("Datos '{}' guardados en '{}'", datos, arch),
+            Operacion::Escribir(arch, datos) => {
+                format!("Datos '{}' guardados en '{}'", datos, arch)
+            }
             Operacion::Eliminar(arch) => format!("Archivo '{}' eliminado", arch),
             Operacion::Respuesta(_) => String::from("Operación no válida para servidor"),
         };
@@ -66,7 +71,6 @@ impl ServidorDisco {
     }
 }
 
-// El microkernel solo enruta mensajes; los servicios corren fuera de él[cite: 2]
 struct Microkernel {
     cola_entrada: VecDeque<Mensaje>,
     cola_salida: VecDeque<Mensaje>,
@@ -107,7 +111,9 @@ struct ProcesoUsuario {
 
 impl ProcesoUsuario {
     fn nuevo(nombre: &str) -> Self {
-        ProcesoUsuario { nombre: nombre.to_string() }
+        ProcesoUsuario {
+            nombre: nombre.to_string(),
+        }
     }
 
     fn solicitar(&self, operacion: Operacion, servidor_destino: &str) -> Mensaje {
@@ -133,7 +139,10 @@ fn main() {
 
     println!("── Fase 1: Procesos envían solicitudes ──");
     kernel.enviar(proc_a.solicitar(Operacion::Leer("archivo.txt".to_string()), "ServidorDisco"));
-    kernel.enviar(proc_b.solicitar(Operacion::Escribir("log.txt".to_string(), "DATOS".to_string()), "ServidorDisco"));
+    kernel.enviar(proc_b.solicitar(
+        Operacion::Escribir("log.txt".to_string(), "DATOS".to_string()),
+        "ServidorDisco",
+    ));
     kernel.enviar(proc_c.solicitar(Operacion::Eliminar("temp.dat".to_string()), "ServidorDisco"));
 
     println!("\n── Fase 2: Kernel despacha al servidor ──");
