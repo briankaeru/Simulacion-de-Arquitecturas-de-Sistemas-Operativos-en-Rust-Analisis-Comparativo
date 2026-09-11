@@ -31,7 +31,6 @@ struct ListaProcesos {
 }
 
 impl ListaProcesos {
-
     fn nueva() -> Self {
         ListaProcesos {
             cabeza: None,
@@ -130,12 +129,15 @@ fn main() {
 
     // procesos de prueba con distinto consumo de memoria
     let pruebas = [
-        (100, "nginx",   128),
-        (101, "redis",   256),
+        (100, "nginx", 128),
+        (101, "redis", 256),
         (102, "node-app", 64),
     ];
 
-    println!("[+] Agregando procesos al contenedor (limite: {} MB)...", cgroup.limite_memoria_mb);
+    println!(
+        "[+] Agregando procesos al contenedor (limite: {} MB)...",
+        cgroup.limite_memoria_mb
+    );
 
     for (pid_real, nombre, mem) in &pruebas {
         let mem_actual = lista.memoria_total();
@@ -151,14 +153,20 @@ fn main() {
             println!("    OK: {} asignado (PID virtual: {})", nombre, pid_v);
             lista.agregar(proc);
         } else {
-            println!("    RECHAZADO: {} excede el limite ({} + {} > {})",
-                nombre, mem_actual, mem, cgroup.limite_memoria_mb);
+            println!(
+                "    RECHAZADO: {} excede el limite ({} + {} > {})",
+                nombre, mem_actual, mem, cgroup.limite_memoria_mb
+            );
         }
     }
 
     println!("\n[*] Procesos activos en el contenedor:");
     lista.mostrar();
-    println!("\n    Memoria total usada: {} / {} MB", lista.memoria_total(), cgroup.limite_memoria_mb);
+    println!(
+        "\n    Memoria total usada: {} / {} MB",
+        lista.memoria_total(),
+        cgroup.limite_memoria_mb
+    );
 
     println!("\n── Fin de prueba Fase 4 ──");
 }

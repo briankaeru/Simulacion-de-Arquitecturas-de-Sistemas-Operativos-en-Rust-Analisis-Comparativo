@@ -9,7 +9,11 @@ struct Mensaje {
 
 impl fmt::Display for Mensaje {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{} -> {}]: {}", self.origen, self.destino, self.contenido)
+        write!(
+            f,
+            "[{} -> {}]: {}",
+            self.origen, self.destino, self.contenido
+        )
     }
 }
 
@@ -25,7 +29,6 @@ struct ColaMensajes {
 }
 
 impl ColaMensajes {
-
     fn nueva() -> Self {
         ColaMensajes { cabeza: None }
     }
