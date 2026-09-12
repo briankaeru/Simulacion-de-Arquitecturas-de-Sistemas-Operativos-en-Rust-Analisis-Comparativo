@@ -63,7 +63,7 @@ impl ListaProcesos {
     fn mostrar(&self) {
         let mut actual = &self.cabeza;
         while let Some(nodo) = actual {
-            println!("    - {}", nodo.proceso);
+            println!("      - {}", nodo.proceso);
             actual = &nodo.siguiente;
         }
     }
@@ -111,64 +111,144 @@ impl Namespace {
     }
 }
 
-fn main() {
-    println!("{}","╔══════════════════════════════════════════╗".red().bold());
-    println!("{} {} {}", "║".red().bold(), "Simulación: Arquitectura de Contenedores".bright_blue().on_bright_white().bold(), "║".red().bold());
-    println!("{}","╚══════════════════════════════════════════╝\n".red().bold());
-    println!("{}","── Fase : Inicialización de Contenedores──\n".yellow().bold());
+// un contenedor agrupa su propio namespace, cgroup y lista de procesos
+struct Contenedor {
+    nombre: String,
+    namespace: Namespace,
+    cgroup: Cgroup,
+    procesos: ListaProcesos,
+}
 
-    let mut lista = ListaProcesos::nueva();
-    let cgroup = Cgroup::nuevo(512);
-    let mut ns = Namespace::nuevo();
+impl Contenedor {
+    fn nuevo(nombre: &str, limite_memoria_mb: u32) -> Self {
+        Contenedor {
+            nombre: nombre.to_string(),
+            namespace: Namespace::nuevo(),
+            cgroup: Cgroup::nuevo(limite_memoria_mb),
+            procesos: ListaProcesos::nueva(),
+        }
+    }
 
-    let pruebas = [
-        (100, "nginx", 128),
-        (101, "redis", 256),
-        (102, "node-app", 64),
-    ];
+    // intenta ejecutar un proceso dentro del contenedor
+    fn ejecutar_proceso(&mut self, pid_real: u32, nombre: &str, memoria_mb: u32) {
+        let mem_actual = self.procesos.memoria_total();
 
-    println!(
-        "{}",
-        format!("[+] Agregando procesos al contenedor (limite: {} MB)...", cgroup.limite_memoria_mb).magenta().bold()
-    );
-
-    for (pid_real, nombre, mem) in &pruebas {
-        let mem_actual = lista.memoria_total();
-
-        if cgroup.permitir(mem_actual, *mem) {
-            let pid_v = ns.asignar_pid();
+        if self.cgroup.permitir(mem_actual, memoria_mb) {
+            let pid_v = self.namespace.asignar_pid();
             let proc = Proceso {
-                pid_real: *pid_real,
+                pid_real,
                 pid_virtual: pid_v,
                 nombre: nombre.to_string(),
-                memoria_mb: *mem,
+                memoria_mb,
             };
             println!(
-                "    {}: {} asignado (PID virtual: {})",
+                "    {}: {} -> PID virtual {}, mem {} MB",
                 "OK".green().bold(),
                 nombre.green(),
-                pid_v.to_string().yellow()
+                pid_v.to_string().yellow(),
+                memoria_mb.to_string().cyan()
             );
-            lista.agregar(proc);
+            self.procesos.agregar(proc);
         } else {
             println!(
-                "    {}: {} excede el limite ({} + {} > {})",
+                "    {}: {} necesita {} MB pero solo quedan {} MB libres",
                 "RECHAZADO".red().bold(),
                 nombre.green(),
-                mem_actual.to_string().cyan(),
-                mem.to_string().cyan(),
-                cgroup.limite_memoria_mb.to_string().cyan()
+                memoria_mb.to_string().cyan(),
+                (self.cgroup.limite_memoria_mb - mem_actual).to_string().cyan()
             );
         }
     }
 
-    println!("\n{}", "[*] Procesos activos en el contenedor:".magenta().bold());
-    lista.mostrar();
+    // muestra el estado del contenedor
+    fn mostrar_estado(&self) {
+        println!(
+            "\n  {} [{}]",
+            "📦".to_string(),
+            self.nombre.bright_blue().bold()
+        );
+        println!(
+            "    Limite de memoria: {} MB",
+            self.cgroup.limite_memoria_mb.to_string().cyan()
+        );
+        println!(
+            "    Memoria usada:    {} MB",
+            self.procesos.memoria_total().to_string().cyan()
+        );
+        println!(
+            "    Procesos activos: {}",
+            self.procesos.cantidad.to_string().yellow()
+        );
+        if self.procesos.cantidad > 0 {
+            self.procesos.mostrar();
+        }
+    }
+}
+
+fn main() {
+    println!("{}", "╔══════════════════════════════════════════════╗".red().bold());
     println!(
-        "\n    Memoria total usada: {} / {} MB",
-        lista.memoria_total().to_string().cyan(),
-        cgroup.limite_memoria_mb.to_string().cyan()
+        "{} {} {}",
+        "║".red().bold(),
+        "Simulación: Arquitectura de Contenedores".bright_blue().bold(),
+        "   ║".red().bold()
+    );
+    println!("{}", "╚══════════════════════════════════════════════╝\n".red().bold());
+
+    // cada contenedor tiene su propio namespace y cgroup aislado
+    let mut web_container = Contenedor::nuevo("web-server", 512);
+    let mut db_container = Contenedor::nuevo("database", 256);
+
+    // --- lanzar procesos en el contenedor web ---
+    println!(
+        "{}",
+        "── Fase 1: Lanzando procesos en contenedor 'web-server' (512 MB) ──".yellow().bold()
+    );
+    web_container.ejecutar_proceso(1001, "nginx", 128);
+    web_container.ejecutar_proceso(1002, "node-app", 256);
+    web_container.ejecutar_proceso(1003, "logger", 64);
+    // este deberia ser rechazado por exceder la cuota
+    web_container.ejecutar_proceso(1004, "monitoring", 128);
+
+    // --- lanzar procesos en el contenedor db ---
+    println!(
+        "\n{}",
+        "── Fase 2: Lanzando procesos en contenedor 'database' (256 MB) ──".yellow().bold()
+    );
+    db_container.ejecutar_proceso(2001, "postgres", 128);
+    db_container.ejecutar_proceso(2002, "redis", 64);
+    // este deberia ser rechazado
+    db_container.ejecutar_proceso(2003, "mysql", 128);
+
+    // --- mostrar aislamiento ---
+    println!(
+        "\n{}",
+        "── Fase 3: Estado de los contenedores (aislamiento) ──".yellow().bold()
+    );
+    web_container.mostrar_estado();
+    db_container.mostrar_estado();
+
+    // --- demostrar que los PIDs virtuales son independientes ---
+    println!(
+        "\n{}",
+        "── Fase 4: Demostración de aislamiento de PIDs ──".yellow().bold()
+    );
+    println!(
+        "  Contenedor '{}': PIDs virtuales van de {} a {}",
+        "web-server".bright_blue(),
+        "1".yellow(),
+        web_container.procesos.cantidad.to_string().yellow()
+    );
+    println!(
+        "  Contenedor '{}': PIDs virtuales van de {} a {}",
+        "database".bright_blue(),
+        "1".yellow(),
+        db_container.procesos.cantidad.to_string().yellow()
+    );
+    println!(
+        "  -> Ambos contenedores tienen PID {} pero son procesos distintos y aislados",
+        "1".yellow().bold()
     );
 
-    println!("\n{}", "── Fin de la simulación ──".green().bold());
+    println!("\n{}", "══ Simulación finalizada ══".green().bold());
 }
