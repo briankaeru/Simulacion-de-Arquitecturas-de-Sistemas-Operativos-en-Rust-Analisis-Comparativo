@@ -164,7 +164,7 @@ impl Contenedor {
     fn mostrar_estado(&self) {
         println!(
             "\n  {} [{}]",
-            "📦".to_string(),
+            "".to_string(),
             self.nombre.bright_blue().bold()
         );
         println!(
